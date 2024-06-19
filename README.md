@@ -22,3 +22,21 @@ To get started with this project, follow these steps:
 ```sh
 git clone https://github.com/SupaDao/Dex-contract.git
 ```
+
+2. **Install Foundry:**
+
+Follow the instructions [here](https://book.getfoundry.sh/) to install Foundry.
+
+## Usage
+
+**Build**
+
+```sh
+forge build
+```
+
+**Test**
+
+```sh
+forge build
+```
