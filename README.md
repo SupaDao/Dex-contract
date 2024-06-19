@@ -38,5 +38,5 @@ forge build
 **Test**
 
 ```sh
-forge build
+forge test
 ```
