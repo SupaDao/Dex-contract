@@ -1,4 +1,4 @@
-# Dex-contract
+# SupaDao Dex-contract
 
 This repository contains the smart contract code for a decentralized exchange (DEX) developed by SupaDao.
 
