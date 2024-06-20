@@ -1,28 +1,65 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Test, console} from "forge-std/Test.sol";
-import {Governance,Governance__VotingExpired} from "../src/Governance.sol";
-import {DeployGovernance} from "../script/Governance.s.sol";
+import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/Script.sol";
+import {RewardToken} from "../src/SupaDaoToken.sol";
+import {
+    Governance,
+    Governance__VotingExpired,
+    Governance__InsufficientVotingPower,
+    Governance__AlreadyVoted
+} from "../src/Governance.sol";
 
-contract GovernanceTest is Test{
-      Governance governance;
-      address admin = address(1);
-      function setUp () external{
-            DeployGovernance deployGovernance = new DeployGovernance();
-            governance = deployGovernance.run();
+contract GovernanceTest is Test {
+    Governance governance;
+    RewardToken token;
+    address user1;
+    address user2;
+    address user3;
 
-      }
+    function setUp() public {
+        token = new RewardToken(10000000 * 1e18);
+        governance = new Governance(address(token));
+        user1 = vm.addr(1);
+        user2 = vm.addr(2);
+        user3 = vm.addr(3);
 
-      function testRevertVotingExpired() public {
-            // Set the voting period to 1 block
-            vm.startPrank(msg.sender);
-            governance.createProposal("test proposal", block.timestamp + 100);
-            vm.stopPrank();
-            vm.prank(address(2));
-            vm.warp(block.timestamp + 1000);
-            vm.expectRevert(abi.encodeWithSelector(Governance__VotingExpired.selector));
-            governance.vote(0, true);
-            vm.stopPrank();
-      }
+        vm.deal(user1, 1000 ether);
+        vm.deal(user2, 50 ether);
+        token.transfer(user1, 20000);
+        token.transfer(user2, 10000);
+    }
+
+    function testVoteBeforeDeadline() public {
+        uint256 proposalId = governance.createProposal("First proposal", block.timestamp + (60 * 60), 1);
+        vm.prank(user1);
+        governance.vote(proposalId, true);
+        uint256 votesFor = governance.getVotesFor(proposalId);
+        assertEq(votesFor, 20000);
+    }
+
+    function testVoteAfterDeadline() public {
+        uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 2);
+        vm.prank(user1);
+        vm.warp(block.timestamp + (60 * 60 * 2));
+        vm.expectRevert(Governance__VotingExpired.selector);
+        governance.vote(proposalId, true);
+    }
+
+    function testVoteInsufficientPower() public {
+        uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 3);
+        vm.prank(user3);
+        vm.expectRevert(Governance__InsufficientVotingPower.selector);
+        governance.vote(proposalId, true);
+    }
+
+    function testCannotVoteTwice() public {
+        uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.prank(user2);
+        governance.vote(proposalId, false);
+        vm.prank(user2);
+        vm.expectRevert(Governance__AlreadyVoted.selector);
+        governance.vote(proposalId, true);
+    }
 }

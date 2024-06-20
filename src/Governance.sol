@@ -12,75 +12,88 @@ error Governance__InsufficientVotingPower();
 error Governance__AlreadyExecuted();
 
 contract Governance is Ownable {
-      struct Proposals{
-            string description;
-            uint256 votesFor;
-            uint256 votesAgainst;
-            uint256 deadline;
-            bool executed;
-      }
+    struct Proposals {
+        string description;
+        uint256 votesFor;
+        uint256 votesAgainst;
+        uint256 deadline;
+        bool executed;
+    }
 
-      IERC20 public governaceToken;
-      uint256 public proposalCount;
+    IERC20 public governaceToken;
 
-      mapping(uint256 => Proposals) public proposals;
-      mapping(uint256 => mapping( address => bool )) public votes;
+    mapping(uint256 => Proposals) public proposals;
+    mapping(uint256 => mapping(address => bool)) public votes;
 
-      event Approve(uint256 proposalId, uint256 votesFor, string description);
+    event Approve(uint256 proposalId, uint256 votesFor, string description);
 
-      constructor (address _tokenAddress) Ownable(msg.sender){
-            governaceToken = IERC20(_tokenAddress);
-      }
+    constructor(address _tokenAddress) Ownable(msg.sender) {
+        governaceToken = IERC20(_tokenAddress);
+    }
 
-      function createProposal(string memory _description, uint256 _duration) public onlyOwner {
-            proposals[proposalCount] = Proposals({
-                  description : _description,
-                  votesFor:0,
-                  votesAgainst: 0,
-                  deadline: block.timestamp + _duration,
-                  executed: false
-            });
-            proposalCount++;
-      }
+    function createProposal(string memory _description, uint256 _duration, uint256 _proposalId)
+        public
+        onlyOwner
+        returns (uint256)
+    {
+        proposals[_proposalId] = Proposals({
+            description: _description,
+            votesFor: 0,
+            votesAgainst: 0,
+            deadline: block.timestamp + _duration,
+            executed: false
+        });
+        return _proposalId;
+    }
 
-      function vote(uint256 _proposalId, bool _support) public{
-            if(block.timestamp > proposals[_proposalId].deadline){
-                  revert Governance__VotingExpired();
-            }
+    function vote(uint256 _proposalId, bool _support) public {
+        if (block.timestamp > proposals[_proposalId].deadline) {
+            revert Governance__VotingExpired();
+        }
 
-            if (votes[_proposalId][msg.sender]){
-                  revert Governance__AlreadyVoted();
-            }
+        if (votes[_proposalId][msg.sender]) {
+            revert Governance__AlreadyVoted();
+        }
 
-            uint256 votingPower = governaceToken.balanceOf(msg.sender);
-            if (votingPower < 0) {
-                  revert Governance__InsufficientVotingPower();
-            }
+        uint256 votingPower = governaceToken.balanceOf(msg.sender);
+        if (votingPower <= 0) {
+            revert Governance__InsufficientVotingPower();
+        }
 
-            if(_support){
-                  proposals[_proposalId].votesFor += votingPower;
-            } else {
-                  proposals[_proposalId].votesAgainst += votingPower;
-            }
+        if (_support) {
+            proposals[_proposalId].votesFor += votingPower;
+        } else {
+            proposals[_proposalId].votesAgainst += votingPower;
+        }
 
-            votes[_proposalId][msg.sender] = true;
-      }
+        votes[_proposalId][msg.sender] = true;
+    }
 
-      function executeProposal (uint256 _proposalId) public onlyOwner{
-            Proposals storage proposal = proposals[_proposalId];
+    function executeProposal(uint256 _proposalId) public onlyOwner {
+        Proposals storage proposal = proposals[_proposalId];
 
-            if(proposal.deadline >= block.timestamp){
-                  revert Governance__VotingNotExpired();
-            }
+        if (proposal.deadline >= block.timestamp) {
+            revert Governance__VotingNotExpired();
+        }
 
-            if (proposal.executed){
-                  revert Governance__AlreadyExecuted();
-            }
+        if (proposal.executed) {
+            revert Governance__AlreadyExecuted();
+        }
 
-            if(proposal.votesFor > proposal.votesAgainst){
-                  emit Approve(_proposalId, proposal.votesFor, proposal.description);
-            }
+        if (proposal.votesFor > proposal.votesAgainst) {
+            emit Approve(_proposalId, proposal.votesFor, proposal.description);
+        }
 
-            proposal.executed = true;
-      }
+        proposal.executed = true;
+    }
+
+    // Helpers
+    function getProposal(uint256 _proposalId) public view returns (Proposals memory) {
+        Proposals storage proposal = proposals[_proposalId];
+        return proposal;
+    }
+
+    function getVotesFor(uint256 _proposalId) public view returns (uint256) {
+        return proposals[_proposalId].votesFor;
+    }
 }
