@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {Test} from "forge-std/Test.sol";
-import {console} from "forge-std/Script.sol";
-import {RewardToken} from "../src/SupaDaoToken.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {
     Governance,
     Governance__VotingExpired,
@@ -13,28 +11,24 @@ import {
     Governance__AlreadyExecuted
 } from "../src/Governance.sol";
 
+import {DeployGovernance} from "../script/Governance.s.sol";
+
 contract GovernanceTest is Test {
     Governance governance;
-    RewardToken token;
     address user1;
     address user2;
     address user3;
 
     function setUp() public {
-        token = new RewardToken(10000000 * 1e18);
-        governance = new Governance(address(token));
-        user1 = vm.addr(1);
-        user2 = vm.addr(2);
+        DeployGovernance deployGovernance = new DeployGovernance();
         user3 = vm.addr(3);
-
-        vm.deal(user1, 1000 ether);
-        vm.deal(user2, 50 ether);
-        token.transfer(user1, 20000);
-        token.transfer(user2, 10000);
+        (governance, user1, user2) = deployGovernance.run();
     }
 
     function testVoteBeforeDeadline() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("First proposal", block.timestamp + (60 * 60), 1);
+        vm.stopPrank();
         vm.prank(user1);
         governance.vote(proposalId, true);
         uint256 votesFor = governance.getVotesFor(proposalId);
@@ -42,7 +36,9 @@ contract GovernanceTest is Test {
     }
 
     function testVoteAfterDeadline() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 2);
+        vm.stopPrank();
         vm.prank(user1);
         vm.warp(block.timestamp + (60 * 60 * 2));
         vm.expectRevert(Governance__VotingExpired.selector);
@@ -50,14 +46,18 @@ contract GovernanceTest is Test {
     }
 
     function testVoteInsufficientPower() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 3);
+        vm.stopPrank();
         vm.prank(user3);
         vm.expectRevert(Governance__InsufficientVotingPower.selector);
         governance.vote(proposalId, true);
     }
 
     function testCannotVoteTwice() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         vm.prank(user2);
         governance.vote(proposalId, false);
         vm.prank(user2);
@@ -66,31 +66,40 @@ contract GovernanceTest is Test {
     }
 
     function testReturnCorrectProposalId() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         assertEq(proposalId, 4);
     }
 
     function testCannotExecuteProposalBeforeDeadLine() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
         vm.expectRevert(Governance__VotingNotExpired.selector);
         governance.executeProposal(proposalId);
+        vm.stopPrank();
     }
 
     function testCannotExecuteProjectExecuted() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         vm.prank(user1);
         governance.vote(proposalId, true);
         vm.prank(user2);
         governance.vote(proposalId, true);
         vm.warp(block.timestamp + (60 * 60 * 2));
-        vm.stopPrank();
+        vm.startPrank(msg.sender);
         governance.executeProposal(proposalId);
         vm.expectRevert(Governance__AlreadyExecuted.selector);
         governance.executeProposal(proposalId);
+        vm.stopPrank();
     }
 
     function testReturnsProposalStruct() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         Governance.Proposals memory proposal = governance.getProposal(proposalId);
 
         assertEq(proposal.description, "Second proposal");
@@ -100,7 +109,9 @@ contract GovernanceTest is Test {
     }
 
     function testReturnsVoteFor() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         vm.prank(user1);
         governance.vote(proposalId, true);
         vm.prank(user2);
@@ -111,7 +122,9 @@ contract GovernanceTest is Test {
     }
 
     function testReturnsVoteAgainst() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         vm.prank(user1);
         governance.vote(proposalId, true);
         vm.prank(user2);
@@ -122,14 +135,18 @@ contract GovernanceTest is Test {
     }
 
     function testReturnsDescription() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         string memory description = governance.getDescription(proposalId);
 
         assertEq(description, "Second proposal");
     }
 
     function testReturnsExecution() public {
+        vm.startPrank(msg.sender);
         uint256 proposalId = governance.createProposal("Second proposal", block.timestamp + (60 * 60), 4);
+        vm.stopPrank();
         bool execution = governance.getExecution(proposalId);
 
         assertEq(execution, false);
