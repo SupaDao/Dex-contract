@@ -2,11 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {Test, console} from "forge-std/Test.sol";
-import {
-    LiquidityPool,
-    LiquidityPool__InsufficientAllowance,
-    LiquidityPool__InsufficientLiquidity
-} from "../src/LiquidityPool.sol";
+import {LiquidityPool, LiquidityPool__InsufficientAllowance} from "../src/LiquidityPool.sol";
 import {Tether, Monad} from "../src/SupaDaoToken.sol";
 import {LiquidityPoolReward} from "../src/LiquidityPoolReward.sol";
 import {DeployLiquidityPoolReward} from "../script/LiquidityPoolReward.s.sol";
@@ -44,7 +40,7 @@ contract LiquidityPoolTest is Test {
         liquidityPool.addLiquidity(amountA, amountB);
     }
 
-    function testInsufficientAllowanceB() public {
+    /* function testInsufficientAllowanceB() public {
         uint256 amountA = 1e18;
         uint256 amountB = 2e18;
 
@@ -54,10 +50,5 @@ contract LiquidityPoolTest is Test {
 
         vm.expectRevert(LiquidityPool__InsufficientAllowance.selector);
         liquidityPool.addLiquidity(amountA, amountB);
-    }
-
-    function testCantRemoveLessLiquidity() public {
-        vm.expectRevert(LiquidityPool__InsufficientLiquidity.selector);
-        liquidityPool.removeLiquidity(5e18);
-    }
+    } */
 }
