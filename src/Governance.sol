@@ -82,6 +82,7 @@ contract Governance is Ownable {
 
         if (proposal.votesFor > proposal.votesAgainst) {
             emit Approve(_proposalId, proposal.votesFor, proposal.description);
+            proposal.executed = true;
         }
 
         proposal.executed = true;
@@ -95,5 +96,21 @@ contract Governance is Ownable {
 
     function getVotesFor(uint256 _proposalId) public view returns (uint256) {
         return proposals[_proposalId].votesFor;
+    }
+
+    function getVotesAgainst(uint256 _proposalId) public view returns (uint256) {
+        return proposals[_proposalId].votesAgainst;
+    }
+
+    function getDescription(uint256 _proposalId) public view returns (string memory) {
+        return proposals[_proposalId].description;
+    }
+
+    function getExecution(uint256 _proposalId) public view returns (bool) {
+        return proposals[_proposalId].executed;
+    }
+
+    function getDeadline(uint256 _proposalId) public view returns (uint256) {
+        return proposals[_proposalId].deadline;
     }
 }

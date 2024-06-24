@@ -2,8 +2,11 @@
 pragma solidity ^0.8.0;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
+error LiquidityPoolReward__InsufficientAmount();
+error LiquidityPoolReward__InsufficientBalance();
 
 contract LiquidityPoolReward is Ownable {
     using SafeERC20 for IERC20;
@@ -44,35 +47,30 @@ contract LiquidityPoolReward is Ownable {
         if (_totalSupply == 0) {
             return rewardPerTokenStored;
         }
-        return
-            rewardPerTokenStored +
-            (((block.timestamp - lastUpdateTime) * rewardRate * 1e18) /
-                _totalSupply);
+        return rewardPerTokenStored + (((block.timestamp - lastUpdateTime) * rewardRate * 1e18) / _totalSupply);
     }
 
     function earned(address account) public view returns (uint256) {
-        return
-            (balances[account] *
-                (rewardPerToken() - userRewardPerTokenPaid[account])) /
-            1e18 +
-            rewards[account];
+        return (balances[account] * (rewardPerToken() - userRewardPerTokenPaid[account])) / 1e18 + rewards[account];
     }
 
-    function stake(
-        uint256 amount,
-        address user
-    ) external updateReward(user) onlyOwner {
-        require(amount > 0, "Cannot stake 0");
+    function stake(uint256 amount, address user) external updateReward(user) onlyOwner {
+        if (amount <= 0) {
+            revert LiquidityPoolReward__InsufficientAmount();
+        }
         _totalSupply += amount;
         balances[user] += amount;
         emit Staked(user, amount);
     }
 
-    function withdraw(
-        uint256 amount,
-        address user
-    ) public updateReward(user) onlyOwner {
-        require(amount > 0, "Cannot withdraw 0");
+    function withdraw(uint256 amount, address user) public updateReward(user) onlyOwner {
+        if (amount <= 0) {
+            revert LiquidityPoolReward__InsufficientAmount();
+        }
+
+        if (balances[user] < amount) {
+            revert LiquidityPoolReward__InsufficientBalance();
+        }
         _totalSupply -= amount;
         balances[user] -= amount;
         emit Withdrawn(user, amount);

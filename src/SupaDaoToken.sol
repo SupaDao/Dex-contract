@@ -8,3 +8,18 @@ contract RewardToken is ERC20 {
         _mint(msg.sender, initialSupply);
     }
 }
+
+/**
+ * @dev This tokens are just for testing purposes
+ */
+contract Tether is ERC20 {
+    constructor(uint256 initialSupply) ERC20("Tether", "USDT") {
+        _mint(msg.sender, initialSupply);
+    }
+}
+
+contract Monad is ERC20 {
+    constructor(uint256 initialSupply) ERC20("Monad", "MND") {
+        _mint(msg.sender, initialSupply);
+    }
+}
