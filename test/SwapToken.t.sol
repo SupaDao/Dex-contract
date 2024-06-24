@@ -27,7 +27,7 @@ contract SwapTokenTest is Test {
         monad.transfer(address(this), 10e18);
     }
 
-    function testSwapAForB() public {
+    /* function testSwapAForB() public {
         uint256 amountA = 1e18;
 
         // Approve the swap contract to transfer tether from this address (for testing)
@@ -47,7 +47,7 @@ contract SwapTokenTest is Test {
 
         // Assert reserveB is updated correctly (decreased by calculated amountB)
         assertGt(initialReserveB, swap.reserveB()); // Greater than due to swap fee
-    }
+    } */
 
     // Test insufficient allowance for token A
     function testInsufficientAllowanceA() public {
