@@ -1,0 +1,12 @@
+{
+  "name": "Dex",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "dev_apus <folorunsopraise580@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/contracts": "^3.4.2",
+    "@uniswap/v3-core": "^1.0.1",
+    "@uniswap/v3-periphery": "^1.4.4"
+  }
+}
