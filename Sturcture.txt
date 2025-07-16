@@ -1,0 +1,92 @@
+dex-v3/
+│
+├── contracts/      # All on‑chain code
+│   ├── core/      # “Kernel” pools & factory
+│   │   ├── Factory.sol
+│   │   ├── Pool.sol
+│   │   ├── PoolDeployer.sol
+│   │   └── interfaces/
+│   │       ├── IPool.sol
+│   │       ├── IFactory.sol
+│   │       └── callback/
+│   │           └── IUniswapV3SwapCallback.sol
+│   │
+│   ├── libraries/               # Pure/‑view math & helpers
+│   │   ├── TickMath.sol
+│   │   ├── FullMath.sol
+│   │   ├── FixedPoint128.sol
+│   │   ├── LiquidityMath.sol
+│   │   ├── FeeMath.sol
+│   │   ├── OracleMath.sol
+│   │   ├── BitMath.sol
+│   │   └── SafeCast.sol
+│   │
+│   ├── periphery/               # UX helpers, routers, position NFTs
+│   │   ├── SwapRouter.sol
+│   │   ├── NonfungiblePositionManager.sol
+│   │   ├── Quoter.sol
+│   │   ├── Multicall.sol
+│   │   └── interfaces/
+│   │       └── ISwapRouter.sol
+│   │
+│   ├── governance/              # Protocol controls & fee capture
+│   │   ├── ProtocolFees.sol
+│   │   ├── EmergencyPause.sol
+│   │   └── TimelockController.sol
+│   │
+│   ├── mocks/                   # Lightweight stubs for testing
+│   │   ├── ERC20Mock.sol
+│   │   ├── WETH9Mock.sol
+│   │   └── CallbackTargetMock.sol
+│   │
+│   └── upgradeability/          # Optional proxies (if chosen)
+│       ├── TransparentProxy.sol
+│       └── ProxyAdmin.sol
+│
+├── script/                       # Foundry / Hardhat runtime scripts
+│   ├── Deploy.s.sol              # forge script to deploy factory & router
+│   ├── CreatePool.s.sol          # quick pool factory helper
+│   └── SimulateSwap.s.sol        # repeatable swap scenarios
+│
+├── test/                         # Unit & invariant tests
+│   ├── libraries/
+│   │   ├── TickMath.t.sol
+│   │   └── FullMath.t.sol
+│   ├── core/
+│   │   ├── Pool.t.sol
+│   │   └── Factory.t.sol
+│   ├── periphery/
+│   │   ├── SwapRouter.t.sol
+│   │   └── PositionManager.t.sol
+│   └── fuzz/
+│       └── Invariants.t.sol
+│
+├── .forge‑snapshot/              # (auto‑generated) Foundry state diffs
+│
+├── deployments/                  # JSON artifacts per network (if using Hardhat‑deploy)
+│   ├── mainnet/
+│   └── sepolia/
+│
+├── abi/                          # Cleaned ABIs for front‑end consumption
+│   ├── Pool.json
+│   └── SwapRouter.json
+│
+├── scripts/                      # Node/TypeScript helpers (non‑on‑chain)
+│   ├── generateAbi.ts
+│   └── encodeMulticall.ts
+│
+├── docs/                         # Architecture notes & specs
+│   ├── AMM_Math.md
+│   ├── UpgradeStrategy.md
+│   └── SecurityReview.md
+│
+├── .github/
+│   ├── workflows/
+│   │   └── ci.yml               # Lint + test on push
+│   └── ISSUE_TEMPLATE.md
+│
+├── foundry.toml                  # Foundry config
+├── hardhat.config.ts             # (optional) Hardhat config
+├── package.json                  # npm scripts for tooling
+├── README.md
+└── LICENSE
