@@ -8,6 +8,7 @@ interface IPoolDeployer {
         address token1;
         uint24 fee;
         address factory;
+        int24 tickSpacing;
     }
 
     function parameters() external view returns (Parameters memory);

@@ -11,6 +11,7 @@ contract PoolDeployer {
         address token1;
         uint24 fee;
         address factory;
+        int24 tickSpacing;
     }
 
     /// @dev Temporary parameters accessible by deployed Pool in its constructor
@@ -21,8 +22,12 @@ contract PoolDeployer {
     /// @param _token1 The second token
     /// @param _fee The fee for this pool
     /// @param _factory The factory deploying it
-    function deploy(address _token0, address _token1, uint24 _fee, address _factory) external returns (address pool) {
-        parameters = Parameters({token0: _token0, token1: _token1, fee: _fee, factory: _factory});
+    function deploy(address _token0, address _token1, uint24 _fee, address _factory, int24 _tickSpacing)
+        external
+        returns (address pool)
+    {
+        parameters =
+            Parameters({token0: _token0, token1: _token1, fee: _fee, factory: _factory, tickSpacing: _tickSpacing});
 
         pool = address(new Pool{salt: keccak256(abi.encode(_token0, _token1, _fee))}());
 
