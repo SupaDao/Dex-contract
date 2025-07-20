@@ -3,8 +3,13 @@ pragma solidity ^0.8.20;
 
 import {LowGasSafeMath} from "./LowGasSafeMath.sol";
 import {SafeCast} from "./SafeCast.sol";
+import {LiquidityMath} from "./LiquidityMath.sol";
+import {TickMath} from "./TickMath.sol";
 
 library Tick {
+    using LowGasSafeMath for int256;
+    using SafeCast for int256;
+
     struct Info {
         uint128 liquidityGross; // total liquidity at the tick
         int128 liquidityNet; // net liquidity added/removed when crossing
@@ -24,40 +29,39 @@ library Tick {
         int128 liquidityDelta,
         uint256 feeGrowthGlobal0X128,
         uint256 feeGrowthGlobal1X128,
-        int56 tickCumulative,
         uint160 secondsPerLiquidityCumulativeX128,
+        int56 tickCumulative,
         uint32 time,
-        bool upper
+        bool upper,
+        uint128 maxLiquidity
     ) internal returns (bool flipped) {
-        Info storage info = self[tick];
+        Tick.Info storage info = self[tick];
 
         uint128 liquidityGrossBefore = info.liquidityGross;
-        uint128 liquidityGrossAfter = liquidityDelta < 0
-            ? liquidityGrossBefore - uint128(-liquidityDelta)
-            : liquidityGrossBefore + uint128(liquidityDelta);
+        uint128 liquidityGrossAfter = LiquidityMath.addDelta(liquidityGrossBefore, liquidityDelta);
 
-        require(liquidityGrossAfter <= type(uint128).max, "Liquidity overflow");
+        require(liquidityGrossAfter <= maxLiquidity, "LO");
 
         flipped = (liquidityGrossAfter == 0) != (liquidityGrossBefore == 0);
 
-        info.liquidityGross = liquidityGrossAfter;
-
-        if (upper) {
-            info.liquidityNet -= liquidityDelta;
-        } else {
-            info.liquidityNet += liquidityDelta;
-        }
-
         if (liquidityGrossBefore == 0) {
-            info.initialized = true;
+            // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
             if (tick <= tickCurrent) {
                 info.feeGrowthOutside0X128 = feeGrowthGlobal0X128;
                 info.feeGrowthOutside1X128 = feeGrowthGlobal1X128;
-                info.tickCumulativeOutside = tickCumulative;
                 info.secondsPerLiquidityOutsideX128 = secondsPerLiquidityCumulativeX128;
+                info.tickCumulativeOutside = tickCumulative;
                 info.secondsOutside = time;
             }
+            info.initialized = true;
         }
+
+        info.liquidityGross = liquidityGrossAfter;
+
+        // when the lower (upper) tick is crossed left to right (right to left), liquidity must be added (removed)
+        info.liquidityNet = upper
+            ? int256(info.liquidityNet).sub(liquidityDelta).toInt128()
+            : int256(info.liquidityNet).add(liquidityDelta).toInt128();
     }
 
     /// @notice Handles crossing a tick (during swap)
@@ -66,18 +70,16 @@ library Tick {
         int24 tick,
         uint256 feeGrowthGlobal0X128,
         uint256 feeGrowthGlobal1X128,
-        int56 tickCumulative,
         uint160 secondsPerLiquidityCumulativeX128,
+        int56 tickCumulative,
         uint32 time
     ) internal returns (int128 liquidityNet) {
         Info storage info = self[tick];
-
         info.feeGrowthOutside0X128 = feeGrowthGlobal0X128 - info.feeGrowthOutside0X128;
         info.feeGrowthOutside1X128 = feeGrowthGlobal1X128 - info.feeGrowthOutside1X128;
-        info.tickCumulativeOutside = tickCumulative - info.tickCumulativeOutside;
         info.secondsPerLiquidityOutsideX128 = secondsPerLiquidityCumulativeX128 - info.secondsPerLiquidityOutsideX128;
+        info.tickCumulativeOutside = tickCumulative - info.tickCumulativeOutside;
         info.secondsOutside = time - info.secondsOutside;
-
         liquidityNet = info.liquidityNet;
     }
 
@@ -116,7 +118,9 @@ library Tick {
 
     /// @notice Calculates the maximum liquidity per tick based on tick spacing
     function tickSpacingToMaxLiquidityPerTick(int24 tickSpacing) internal pure returns (uint128) {
-        require(tickSpacing > 0 && tickSpacing <= 16384, "Invalid spacing");
-        return uint128(type(uint128).max / (uint24(887272 / uint24(tickSpacing))));
+        int24 minTick = (TickMath.MIN_TICK / tickSpacing) * tickSpacing;
+        int24 maxTick = (TickMath.MAX_TICK / tickSpacing) * tickSpacing;
+        uint24 numTicks = uint24((maxTick - minTick) / tickSpacing) + 1;
+        return type(uint128).max / numTicks;
     }
 }

@@ -97,6 +97,7 @@ contract Quoter is ISupaSwapQuoter {
     }
 
     function getPool(address tokenA, address tokenB, uint24 fee) internal view returns (IPool) {
-        return IPool(computePoolAddress(tokenA, tokenB, fee));
+        PoolAddress.PoolKey memory key = PoolAddress.getPoolKey(tokenA, tokenB, fee);
+        return IPool(PoolAddress.computeAddress(factory, key.token0, key.token1, key.fee));
     }
 }

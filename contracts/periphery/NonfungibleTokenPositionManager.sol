@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import {ERC721} from "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import {IERC721Metadata} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import {IPool} from "../core/interfaces/IPool.sol";
 import {PoolAddress} from "../libraries/PoolAddress.sol";
 import {TickMath} from "../libraries/TickMath.sol";
@@ -14,19 +15,20 @@ import {ImutableState} from "../base/ImutableStates.sol";
 import {SelfPermit} from "../base/SelfPermit.sol";
 import {FullMath} from "../libraries/FullMath.sol";
 import {FixedPoint128} from "../libraries/FixedPoint128.sol";
-import {INonfungiblePositionManager} from "./interfaces/INonfungiblePositionManger.sol";
+import {INonfungibleTokenPositionManager} from "./interfaces/INonfungibleTokenPositionManager.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {PoolInitializer} from "../base/PoolInitializer.sol";
 import {ERC721Permit} from "../base/ERC721Permit.sol";
 import {INonfungibleTokenPositionDescriptor} from "./interfaces/INonfungibleTokenPositionDescriptor.sol";
+import {ProtocolFees} from "../governance/ProtocolFees.sol";
+import {EmergencyPause} from "../governance/EmergencyPause.sol";
 
-contract NonfungiblePositionManager is
-    INonfungiblePositionManager,
-    Multicall,
+contract NonfungibleTokenPositionManager is
+    INonfungibleTokenPositionManager,
     ERC721Permit,
-    ImutableState,
-    PoolInitializer,
+    Multicall,
     LiquidityManagement,
+    PoolInitializer,
     ReentrancyGuard,
     SelfPermit
 {
@@ -42,7 +44,6 @@ contract NonfungiblePositionManager is
         uint128 tokensOwed0;
         uint128 tokensOwed1;
     }
-    // tokenId => Position
 
     mapping(uint256 => Position) public _positions;
     mapping(address => uint80) private _poolIds;
@@ -51,6 +52,8 @@ contract NonfungiblePositionManager is
     mapping(uint80 => PoolAddress.PoolKey) private _poolIdToPoolKey;
 
     address private immutable _tokenDescriptor;
+    ProtocolFees public immutable protocolFees;
+    EmergencyPause public immutable emergencyPause;
 
     modifier checkDeadline(uint256 deadline) {
         if (block.timestamp > deadline) revert TransactionExpired();
@@ -62,11 +65,21 @@ contract NonfungiblePositionManager is
         _;
     }
 
-    constructor(address _factory, address _WETH9, address _tokenDescriptor_)
-        ERC721Permit("SupaSwap Position", "SSP-POS", "1")
-        ImutableState(_factory, _WETH9)
-    {
+    modifier notPaused(address pool) {
+        require(!emergencyPause.isPoolPaused(pool), "Pool paused");
+        _;
+    }
+
+    constructor(
+        address _factory,
+        address _WETH9,
+        address _tokenDescriptor_,
+        address _protocolFees,
+        address _emergencyPause
+    ) ERC721Permit("SupaSwap Position", "SSP-POS", "1") ImutableState(_factory, _WETH9) {
         _tokenDescriptor = _tokenDescriptor_;
+        protocolFees = ProtocolFees(_protocolFees);
+        emergencyPause = EmergencyPause(_emergencyPause);
     }
 
     function positions(uint256 tokenId)
@@ -138,12 +151,12 @@ contract NonfungiblePositionManager is
                 amount1Min: params.amount1Min
             })
         );
+        if (!emergencyPause.isPoolPaused(address(pool))) revert PoolPaused();
         _mint(params.recipient, (tokenId = _nextId++));
 
         bytes32 positionKey = keccak256(abi.encodePacked(address(this), params.tickLower, params.tickUpper));
         (, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128,,) = pool.getPositions(positionKey);
 
-        // idempotent set
         uint80 poolId = cachePoolKey(
             address(pool), PoolAddress.PoolKey({token0: params.token0, token1: params.token1, fee: params.fee})
         );
@@ -168,8 +181,9 @@ contract NonfungiblePositionManager is
         return INonfungibleTokenPositionDescriptor(_tokenDescriptor).tokenURI(this, tokenId);
     }
 
-    // save bytecode by removing implementation of unused method
-    function baseURI() public pure override returns (string memory) {}
+    function baseURI() public view returns (string memory) {
+        return _baseURI();
+    }
 
     function increaseLiquidity(IncreaseLiquidityParams calldata params)
         external
@@ -182,8 +196,9 @@ contract NonfungiblePositionManager is
         Position storage position = _positions[params.tokenId];
         if (msg.sender != position.operator && msg.sender != _ownerOf(params.tokenId)) revert NotAuthorized();
         PoolAddress.PoolKey memory poolKey = _poolIdToPoolKey[position.poolId];
+        IPool pool = IPool(PoolAddress.computeAddress(factory, poolKey.token0, poolKey.token1, poolKey.fee));
+        if (!emergencyPause.isPoolPaused(address(pool))) revert PoolPaused();
 
-        IPool pool;
         (liquidity, amount0, amount1, pool) = addLiquidity(
             AddLiquidityParams({
                 token0: poolKey.token0,
@@ -236,6 +251,8 @@ contract NonfungiblePositionManager is
         if (msg.sender != position.operator && msg.sender != _ownerOf(params.tokenId)) revert NotAuthorized();
         PoolAddress.PoolKey memory poolKey = _poolIdToPoolKey[position.poolId];
         IPool pool = IPool(PoolAddress.computeAddress(factory, poolKey.token0, poolKey.token1, poolKey.fee));
+        if (!emergencyPause.isPoolPaused(address(pool))) revert PoolPaused();
+
         (amount0, amount1) = pool.burn(position.tickLower, position.tickUpper, params.liquidity);
         if (amount0 < params.amount0Min || amount1 < params.amount1Min) revert SlipageCheck();
 
@@ -275,9 +292,9 @@ contract NonfungiblePositionManager is
 
         Position storage position = _positions[params.tokenId];
         if (msg.sender != _ownerOf(params.tokenId) && msg.sender != position.operator) revert NotAuthorized();
-
         PoolAddress.PoolKey memory poolKey = _poolIdToPoolKey[position.poolId];
         IPool pool = IPool(PoolAddress.computeAddress(factory, poolKey.token0, poolKey.token1, poolKey.fee));
+        if (!emergencyPause.isPoolPaused(address(pool))) revert PoolPaused();
 
         (uint128 tokensOwed0, uint128 tokensOwed1) = (position.tokensOwed0, position.tokensOwed1);
 
@@ -320,6 +337,9 @@ contract NonfungiblePositionManager is
         Position storage position = _positions[tokenId];
         if (position.liquidity != 0) revert LiquidityNotZero();
         if (position.tokensOwed0 != 0 || position.tokensOwed1 != 0) revert FeesOwed();
+        PoolAddress.PoolKey memory poolKey = _poolIdToPoolKey[position.poolId];
+        IPool pool = IPool(PoolAddress.computeAddress(factory, poolKey.token0, poolKey.token1, poolKey.fee));
+        if (!emergencyPause.isPoolPaused(address(pool))) revert PoolPaused();
         delete _positions[tokenId];
         _burn(tokenId);
         emit PositionBurned(tokenId, owner);
@@ -329,20 +349,30 @@ contract NonfungiblePositionManager is
         return keccak256(abi.encodePacked(address(this), tickLower, tickUpper));
     }
 
-    function _getAndIncrementNonce(uint256 tokenId) internal returns (uint256) {
+    function _getAndIncrementNonce(uint256 tokenId) internal override returns (uint256) {
         return uint256(_positions[tokenId].nonce++);
     }
 
-    /// @inheritdoc IERC721
     function getApproved(uint256 tokenId) public view override(ERC721, IERC721) returns (address) {
         require(_exists(tokenId), "ERC721: approved query for nonexistent token");
 
         return _positions[tokenId].operator;
     }
 
-    /// @dev Overrides _approve to use the operator in the position, which is packed with the position permit nonce
-    function _approve(address to, uint256 tokenId) internal override(ERC721) {
+    function _approve(address to, uint256 tokenId) internal {
         _positions[tokenId].operator = to;
         emit Approval(ownerOf(tokenId), to, tokenId);
+    }
+
+    function tokenByIndex(uint256 index) external view override returns (uint256) {}
+    function tokenOfOwnerByIndex(address owner, uint256 index) external view returns (uint256) {}
+    function totalSupply() external view returns (uint256) {}
+
+    function _exists(uint256 tokenId) internal view virtual returns (bool) {
+        return _ownerOf(tokenId) != address(0);
+    }
+
+    function getFactory() external view override returns (address) {
+        return factory;
     }
 }

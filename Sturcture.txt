@@ -90,3 +90,57 @@ dex-v3/
 ├── package.json                  # npm scripts for tooling
 ├── README.md
 └── LICENSE
+
+
+
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "forge-std/Script.sol";
+import {Factory} from "../src/core/Factory.sol";
+import {PoolDeployer} from "../src/core/PoolDeployer.sol";
+import {ProtocolFee} from "../src/governance/ProtocolFee.sol";
+import {SwapRouter} from "../src/periphery/SwapRouter.sol";
+import {NonfungiblePositionManager} from "../src/periphery/NonfungiblePositionManager.sol";
+import {WrappedNative} from "../src/mock/WrappedNative.sol";
+
+contract DeploySupaSwap is Script {
+    function run() external {
+        address deployer = msg.sender;
+
+        vm.startBroadcast();
+
+        // Deploy core governance
+        ProtocolFee protocolFee = new ProtocolFee(deployer);
+
+        // Deploy PoolDeployer and Factory
+        PoolDeployer poolDeployer = new PoolDeployer();
+        Factory factory = new Factory(address(poolDeployer), address(protocolFee));
+
+        // Set factory in pool deployer
+        poolDeployer.setFactory(address(factory));
+
+        // Deploy wrapped native token (e.g., WETH or WMONAD)
+        WrappedNative wrappedNative = new WrappedNative();
+
+        // Deploy Router
+        SwapRouter router = new SwapRouter(address(factory), address(wrappedNative));
+
+        // Deploy Position Manager
+        NonfungiblePositionManager nftManager = new NonfungiblePositionManager(
+            address(factory),
+            address(wrappedNative)
+        );
+
+        vm.stopBroadcast();
+
+        console.log("📦 Protocol Deployment Complete");
+        console.log("Factory:", address(factory));
+        console.log("PoolDeployer:", address(poolDeployer));
+        console.log("ProtocolFee:", address(protocolFee));
+        console.log("SwapRouter:", address(router));
+        console.log("PositionManager (NFT):", address(nftManager));
+        console.log("WrappedNative:", address(wrappedNative));
+    }
+}

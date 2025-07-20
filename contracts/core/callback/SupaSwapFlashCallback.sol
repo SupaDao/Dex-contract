@@ -2,11 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ISupaSwapCallback} from "../interfaces/callback/ISupaSwapCallback.sol";
+import {ISupaSwapFlashCallback} from "../interfaces/callback/ISupaSwapFlashCallback.sol";
 
-/// @notice This contract handles mint and swap callbacks from SupaDEX pools
-/// It should be inherited or used by routers, strategy contracts, etc.
-abstract contract SupaSwapCallback is ISupaSwapCallback {
+abstract contract SupaSwapFlashCallback is ISupaSwapFlashCallback {
     address public immutable pool;
 
     constructor(address _pool) {
@@ -14,7 +12,7 @@ abstract contract SupaSwapCallback is ISupaSwapCallback {
     }
 
     /// @notice Called during swap() to supply only the input token to the pool
-    function supaSwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata data) external override {
+    function supaSwapFlashCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata data) external override {
         require(msg.sender == pool, "Unauthorized callback");
         (address tokenIn, address tokenOut) = abi.decode(data, (address, address));
 

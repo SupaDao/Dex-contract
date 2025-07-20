@@ -6,20 +6,18 @@ import {ISupaSwapMintCallback} from "../interfaces/callback/ISupaSwapMintCallbac
 
 /// @notice This contract handles mint and swap callbacks from SupaDEX pools
 /// It should be inherited or used by routers, strategy contracts, etc.
-abstract contract SupaSwapCallback is ISupaSwapMintCallback {
-    address public immutable token0;
-    address public immutable token1;
+abstract contract SupaSwapMintCallback is ISupaSwapMintCallback {
     address public immutable pool;
 
-    constructor(address _token0, address _token1, address _pool) {
-        token0 = _token0;
-        token1 = _token1;
+    constructor(address _pool) {
         pool = _pool;
     }
 
     /// @notice Called during mint() to supply token0 and token1 to the pool
-    function supaSwapMintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata) external {
+    function supaSwapMintCallback(uint256 amount0Owed, uint256 amount1Owed, bytes calldata data) external {
         require(msg.sender == pool, "SupaSwapCallback: unauthorized");
+
+        (address token0, address token1) = abi.decode(data, (address, address));
 
         if (amount0Owed > 0) {
             IERC20(token0).transfer(msg.sender, amount0Owed);

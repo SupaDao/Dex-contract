@@ -16,6 +16,8 @@ import {SelfPermit} from "../base/SelfPermit.sol";
 import {Payment} from "../base/Payment.sol";
 import {ImutableState} from "../base/ImutableStates.sol";
 import {PaymentWithFee} from "../base/PaymentWithFee.sol";
+import {ProtocolFees} from "../governance/ProtocolFees.sol";
+import {EmergencyPause} from "../governance/EmergencyPause.sol";
 
 contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, PaymentWithFee {
     using Path for bytes;
@@ -25,6 +27,9 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
     error TooLittleReceived();
     error ExcessiveInputAmount();
     error ExcessiveOutputAmount();
+
+    ProtocolFees public immutable protocolFees;
+    EmergencyPause public immutable emergencyPause;
 
     struct SwapCallbackData {
         bytes path;
@@ -36,12 +41,16 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         _;
     }
 
-    constructor(address _factory, address _weth9) ImutableState(_factory, _weth9) {}
+    constructor(address _factory, address _weth9, address _protocolFees, address _emergencyPause)
+        ImutableState(_factory, _weth9)
+    {
+        protocolFees = ProtocolFees(_protocolFees);
+        emergencyPause = EmergencyPause(_emergencyPause);
+    }
 
     function supaSwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata _data) external override {
         require(amount0Delta > 0 || amount1Delta > 0, "Zero swap");
 
-        // Decode the swap callback data
         SwapCallbackData memory data = abi.decode(_data, (SwapCallbackData));
         (address tokenIn, address tokenOut, uint24 fee) = data.path.decodeFirstPool();
         CallbackValidation.verifyCallback(factory, tokenIn, tokenOut, fee);
@@ -51,19 +60,19 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         if (isExactInput) {
             pay(tokenIn, data.payer, msg.sender, amountToPay);
         } else {
-            // either initiate the next swap or pay
             if (data.path.hasMultiplePools()) {
                 data.path = data.path.skipToken();
                 exactOutputInternal(amountToPay, msg.sender, 0, data);
             } else {
-                tokenIn = tokenOut; // swap in/out because exact output swaps are reversed
+                tokenIn = tokenOut;
                 pay(tokenIn, data.payer, msg.sender, amountToPay);
             }
         }
     }
 
     function getPool(address tokenA, address tokenB, uint24 fee) private view returns (IPool) {
-        return IPool(PoolAddress.computeAddress(factory, tokenA, tokenB, fee));
+        PoolAddress.PoolKey memory key = PoolAddress.getPoolKey(tokenA, tokenB, fee);
+        return IPool(PoolAddress.computeAddress(factory, key.token0, key.token1, key.fee));
     }
 
     function exactInputInternal(
@@ -75,10 +84,12 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         if (recipient == address(0)) recipient = address(this);
 
         (address tokenIn, address tokenOut, uint24 fee) = data.path.decodeFirstPool();
+        IPool pool = getPool(tokenIn, tokenOut, fee);
+        require(!emergencyPause.isPoolPaused(address(pool)), "Pool paused");
 
         bool zeroForOne = tokenIn < tokenOut;
 
-        (int256 amount0, int256 amount1) = getPool(tokenIn, tokenOut, fee).swap(
+        (int256 amount0, int256 amount1) = pool.swap(
             recipient,
             zeroForOne,
             amountIn.toInt256(),
@@ -91,7 +102,6 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         return uint256(-(zeroForOne ? amount1 : amount0));
     }
 
-    /// @inheritdoc ISwapRouter
     function exactInputSingle(ExactInputSingleParams calldata params)
         external
         payable
@@ -99,12 +109,6 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         checkDeadline(params.deadline)
         returns (uint256 amountOut)
     {
-        // Compute the pool address
-        address pool = PoolAddress.computeAddress(factory, params.tokenIn, params.tokenOut, params.fee);
-
-        // Approve the pool to spend the input tokens
-        TransferHelper.safeApprove(params.tokenIn, pool, params.amountIn);
-
         amountOut = exactInputInternal(
             params.amountIn,
             params.recipient,
@@ -115,7 +119,6 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         if (amountOut < params.amountOutMinimum) revert TooLittleReceived();
     }
 
-    /// @inheritdoc ISwapRouter
     function exactInput(ExactInputParams calldata params)
         external
         payable
@@ -128,14 +131,14 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         while (true) {
             bool hasMultiplePools = params.path.hasMultiplePools();
 
-            exactInputInternal(
+            amountOut = exactInputInternal(
                 params.amountIn,
                 hasMultiplePools ? address(this) : params.recipient,
                 0,
                 SwapCallbackData({path: params.path.getFirstPool(), payer: payer})
             );
             if (hasMultiplePools) {
-                payer = address(this); // at this point, the caller has paid
+                payer = address(this);
                 params.path.skipToken();
             } else {
                 amountOut = params.amountIn;
@@ -152,14 +155,15 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         uint160 sqrtPriceLimitX96,
         SwapCallbackData memory data
     ) private returns (uint256 amountIn) {
-        // allow swapping to the router address with address 0
         if (recipient == address(0)) recipient = address(this);
 
         (address tokenOut, address tokenIn, uint24 fee) = data.path.decodeFirstPool();
+        IPool pool = getPool(tokenIn, tokenOut, fee);
+        require(!emergencyPause.isPoolPaused(address(pool)), "Pool paused");
 
         bool zeroForOne = tokenIn < tokenOut;
 
-        (int256 amount0Delta, int256 amount1Delta) = getPool(tokenIn, tokenOut, fee).swap(
+        (int256 amount0Delta, int256 amount1Delta) = pool.swap(
             recipient,
             zeroForOne,
             -amountOut.toInt256(),
@@ -173,8 +177,6 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         (amountIn, amountOutReceived) = zeroForOne
             ? (uint256(amount0Delta), uint256(-amount1Delta))
             : (uint256(amount1Delta), uint256(-amount0Delta));
-        // it's technically possible to not receive the full output amount,
-        // so if no price limit has been specified, require this possibility away
         if (sqrtPriceLimitX96 == 0) require(amountOutReceived == amountOut);
         return amountIn;
     }
@@ -202,10 +204,8 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         while (true) {
             bool hasMultiplePools = path.hasMultiplePools();
 
-            // decode the last pool in the path
             (address tokenOut, address tokenIn, uint24 fee) = path.decodeLastPool();
 
-            // build the subpath for the last pool only
             bytes memory subPath = abi.encodePacked(tokenOut, fee, tokenIn);
 
             amountIn = exactOutputInternal(

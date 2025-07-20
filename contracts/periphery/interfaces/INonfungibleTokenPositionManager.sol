@@ -9,13 +9,12 @@ import {IImmutableState} from "../../interfaces/IImmutableState.sol";
 import {IPoolInitializer} from "../../interfaces/IPoolInitializer.sol";
 import {PoolAddress} from "../../libraries/PoolAddress.sol";
 
-interface INonfungiblePositionManager is
+interface INonfungibleTokenPositionManager is
+    IPoolInitializer,
     IPayment,
-    IImmutableState,
-    IERC721Permit,
-    IERC721Enumerable,
     IERC721Metadata,
-    IPoolInitializer
+    IERC721Enumerable,
+    IERC721Permit
 {
     struct MintParams {
         address token0;
@@ -64,6 +63,7 @@ interface INonfungiblePositionManager is
     error FeesOwed();
     error LiquidityNotZero();
     error InvalidToken();
+    error PoolPaused();
 
     event PositionMinted(
         uint256 indexed tokenId,
@@ -166,4 +166,6 @@ interface INonfungiblePositionManager is
             uint128 tokensOwed0,
             uint128 tokensOwed1
         );
+
+    function getFactory() external view returns (address);
 }

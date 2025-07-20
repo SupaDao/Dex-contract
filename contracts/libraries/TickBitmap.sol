@@ -11,9 +11,11 @@ library TickBitmap {
     }
 
     /// @notice Flips the bit at a given tick position (toggle initialize/uninitialize)
-    function flipTick(mapping(int16 => uint256) storage self, int24 tick) internal {
-        (int16 wordPos, uint8 bitPos) = position(tick);
-        self[wordPos] ^= 1 << bitPos;
+    function flipTick(mapping(int16 => uint256) storage self, int24 tick, int24 tickSpacing) internal {
+        require(tick % tickSpacing == 0); // ensure that the tick is spaced
+        (int16 wordPos, uint8 bitPos) = position(tick / tickSpacing);
+        uint256 mask = 1 << bitPos;
+        self[wordPos] ^= mask;
     }
 
     /// @notice Returns true if the tick is initialized (bit is set)
@@ -32,10 +34,12 @@ library TickBitmap {
     function nextInitializedTickWithinOneWord(
         mapping(int16 => uint256) storage self,
         int24 tick,
-        bool lte,
-        int24 tickSpacing
+        int24 tickSpacing,
+        bool lte
     ) internal view returns (int24 next, bool initialized) {
-        (int16 wordPos, uint8 bitPos) = position(tick / tickSpacing);
+        int24 compressed = tick / tickSpacing;
+        if (tick < 0 && tick % tickSpacing != 0) compressed--;
+        (int16 wordPos, uint8 bitPos) = position(compressed);
 
         uint256 mask;
         uint256 word = self[wordPos];
