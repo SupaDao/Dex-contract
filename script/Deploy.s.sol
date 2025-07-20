@@ -5,7 +5,6 @@ import {Script} from "forge-std/Script.sol";
 import {console} from "forge-std/console.sol";
 
 // Core Contracts
-import {ProtocolFees} from "../contracts/governance/ProtocolFees.sol";
 import {EmergencyPause} from "../contracts/governance/EmergencyPause.sol";
 import {Factory} from "../contracts/core/Factory.sol";
 import {PoolDeployer} from "../contracts/core/PoolDeployer.sol";
@@ -25,18 +24,15 @@ contract DeployAll is Script {
         vm.startBroadcast();
 
         // 1. Governance Contracts
-        EmergencyPause emergencyPause = new EmergencyPause();
-        console.log("EmergencyPause deployed at:", address(emergencyPause));
-
-        ProtocolFees protocolFees = new ProtocolFees(msg.sender, 100, 100); // example: 0.01% fees
-        console.log("ProtocolFees deployed at:", address(protocolFees));
+        // EmergencyPause emergencyPause = new EmergencyPause();
+        // console.log("EmergencyPause deployed at:", address(emergencyPause));
 
         // 2. Core Contracts
-        Factory factory = new Factory(address(protocolFees), address(emergencyPause));
+        Factory factory = new Factory();
         console.log("Factory deployed at:", address(factory));
 
-        PoolDeployer poolDeployer = new PoolDeployer();
-        console.log("PoolDeployer deployed at:", address(poolDeployer));
+        // PoolDeployer poolDeployer = new PoolDeployer();
+        // console.log("PoolDeployer deployed at:", address(poolDeployer));
 
         // 3. WETH / Wrapped Monad
         WMONMock WMON = new WMONMock();
@@ -51,18 +47,11 @@ contract DeployAll is Script {
         Quoter quoter = new Quoter(address(factory));
         console.log("Quoter deployed at:", address(quoter));
 
-        NonfungibleTokenPositionManager nft = new NonfungibleTokenPositionManager(
-            address(factory), address(WMON), address(descriptor), address(protocolFees), address(emergencyPause)
-        );
-        console.log("NonfungibleTokenPositionManager deployed at:", address(nft));
+        NonfungibleTokenPositionManager positionManager =
+            new NonfungibleTokenPositionManager(address(factory), address(WMON), address(descriptor));
+        console.log("NonfungibleTokenPositionManager deployed at:", address(positionManager));
 
-        NonfungibleTokenPositionManager positionManager = new NonfungibleTokenPositionManager(
-            address(factory), address(WMON), address(descriptor), address(protocolFees), address(emergencyPause)
-        );
-        console.log("NonfungiblePositionManager deployed at:", address(positionManager));
-
-        SwapRouter router =
-            new SwapRouter(address(factory), address(WMON), address(protocolFees), address(emergencyPause));
+        SwapRouter router = new SwapRouter(address(factory), address(WMON));
         console.log("SwapRouter deployed at:", address(router));
 
         vm.stopBroadcast();

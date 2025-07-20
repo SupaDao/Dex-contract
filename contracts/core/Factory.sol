@@ -10,10 +10,6 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @notice Deploys and tracks pools for SupaDAO DEX
 
 contract Factory is IFactory, Ownable, PoolDeployer, NoDelegateCall {
-    address private immutable original;
-    address public immutable protocolFees;
-    address public immutable emergencyPause;
-
     address[] public allPools;
 
     ///@dev custom error;
@@ -26,15 +22,11 @@ contract Factory is IFactory, Ownable, PoolDeployer, NoDelegateCall {
     error FeeToHigh();
 
     /// @dev token0 => token1 => fee => pool address
-    mapping(address => mapping(address => mapping(uint24 => address))) public getPool;
+    mapping(address => mapping(address => mapping(uint24 => address))) public override getPool;
 
     mapping(uint24 => int24) public override feeToTickSpacing;
 
-    constructor(address _protocolFees, address _emergencyPause) Ownable(msg.sender) {
-        original = address(this);
-        protocolFees = _protocolFees;
-        emergencyPause = _emergencyPause;
-
+    constructor() Ownable(msg.sender) {
         // Initialize default fee tiers
         feeToTickSpacing[500] = 10;
         emit FeeEnabled(500, 10);
@@ -65,7 +57,7 @@ contract Factory is IFactory, Ownable, PoolDeployer, NoDelegateCall {
         if (token0 == address(0)) revert ZeroAddress();
         if (getPool[token0][token1][_fee] != address(0)) revert ExistingPool();
         int24 tickSpacing = feeToTickSpacing[_fee];
-        pool = deploy(token0, token1, _fee, address(this), tickSpacing, protocolFees, emergencyPause);
+        pool = deploy(token0, token1, _fee, address(this), tickSpacing);
         getPool[token0][token1][_fee] = pool;
         getPool[token1][token0][_fee] = pool;
         allPools.push(pool);

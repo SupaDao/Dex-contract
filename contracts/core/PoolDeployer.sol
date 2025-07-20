@@ -1,32 +1,27 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IPool} from "./interfaces/IPool.sol";
 import {IPoolDeployer} from "./interfaces/IPoolDeployer.sol";
 import {Pool} from "./Pool.sol";
 
 contract PoolDeployer is IPoolDeployer {
     /// @dev Temporary parameters accessible by deployed Pool in its constructor
     Parameters public _parameters;
-
     /// @notice Deploys a new Pool contract
     /// @param _token0 The first token in the pair
     /// @param _token1 The second token
     /// @param _fee The fee for this pool
     /// @param _factory The factory deploying it
-    function deploy(
-        address _token0,
-        address _token1,
-        uint24 _fee,
-        address _factory,
-        int24 _tickSpacing,
-        address _protocolFees,
-        address _emergencyPause
-    ) internal returns (address pool) {
+    // Constructor is empty, as this contract does not need to initialize any state
+
+    function deploy(address _token0, address _token1, uint24 _fee, address _factory, int24 _tickSpacing)
+        internal
+        returns (address pool)
+    {
         _parameters =
             Parameters({token0: _token0, token1: _token1, fee: _fee, factory: _factory, tickSpacing: _tickSpacing});
 
-        pool = address(new Pool{salt: keccak256(abi.encode(_token0, _token1, _fee))}(_protocolFees, _emergencyPause));
+        pool = address(new Pool{salt: keccak256(abi.encode(_token0, _token1, _fee))}());
 
         delete _parameters;
     }

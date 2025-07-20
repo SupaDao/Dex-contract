@@ -49,6 +49,18 @@ interface IPool {
             uint160 secondsPerLiquidityCumulativeX128,
             bool initialized
         );
+    function slot0()
+        external
+        view
+        returns (
+            uint160 sqrtPriceX96,
+            int24 tick,
+            uint16 observationIndex,
+            uint16 observationCardinality,
+            uint16 observationCardinalityNext,
+            uint8 feeProtocol,
+            bool unlocked
+        );
 
     ///Derived state
     function observe(uint32[] calldata secondsAgos)

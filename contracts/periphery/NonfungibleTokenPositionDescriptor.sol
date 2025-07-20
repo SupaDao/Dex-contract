@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {IPool} from "../core/interfaces/IPool.sol";
 import {ChainId} from "../libraries/ChainId.sol";
-
 import {INonfungibleTokenPositionDescriptor} from "./interfaces/INonfungibleTokenPositionDescriptor.sol";
 import {INonfungibleTokenPositionManager} from "./interfaces/INonfungibleTokenPositionManager.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -20,7 +19,6 @@ contract NonfungibleTokenPositionDescriptor is INonfungibleTokenPositionDescript
     address private constant WBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
 
     address public immutable WETH9;
-    /// @dev A null-terminated string
     bytes32 public immutable nativeCurrencyLabelBytes;
 
     constructor(address _WETH9, bytes32 _nativeCurrencyLabelBytes) {
@@ -48,45 +46,93 @@ contract NonfungibleTokenPositionDescriptor is INonfungibleTokenPositionDescript
         override
         returns (string memory)
     {
+        // Fetch position data
         (,, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper,,,,,) =
             positionManager.positions(tokenId);
 
-        PoolAddress.PoolKey memory key = PoolAddress.PoolKey({token0: token0, token1: token1, fee: fee});
-        IPool pool = IPool(PoolAddress.computeAddress(positionManager.getFactory(), key.token0, key.token1, key.fee));
+        // Compute pool address
+        address poolAddress = PoolAddress.computeAddress(address(positionManager.getFactory()), token0, token1, fee);
+        IPool pool = IPool(poolAddress);
 
-        bool _flipRatio = flipRatio(token0, token1, ChainId.get());
-        address quoteTokenAddress = !_flipRatio ? token1 : token0;
-        address baseTokenAddress = !_flipRatio ? token0 : token1;
-        (, int24 tick,,,,,) = pool.getSlot0();
+        // Get token order
+        (address quoteTokenAddress, address baseTokenAddress, bool flipRatio) = getTokenOrder(token0, token1);
 
-        return NFTDescriptor.constructTokenURI(
-            NFTDescriptor.ConstructTokenURIParams({
-                tokenId: tokenId,
-                quoteTokenAddress: quoteTokenAddress,
-                baseTokenAddress: baseTokenAddress,
-                quoteTokenSymbol: quoteTokenAddress == WETH9
-                    ? nativeCurrencyLabel()
-                    : SafeERC20Namer.tokenSymbol(quoteTokenAddress),
-                baseTokenSymbol: baseTokenAddress == WETH9
-                    ? nativeCurrencyLabel()
-                    : SafeERC20Namer.tokenSymbol(baseTokenAddress),
-                quoteTokenDecimals: IERC20Metadata(quoteTokenAddress).decimals(),
-                baseTokenDecimals: IERC20Metadata(baseTokenAddress).decimals(),
-                flipRatio: _flipRatio,
-                tickLower: tickLower,
-                tickUpper: tickUpper,
-                tickCurrent: tick,
-                tickSpacing: pool.getTickSpacing(),
-                fee: fee,
-                poolAddress: address(pool)
-            })
-        );
+        // Get pool data
+        (int24 tickCurrent, int24 tickSpacing) = getPoolData(pool);
+
+        // Construct token URI params in parts
+        NFTDescriptor.ConstructTokenURIParams memory params =
+            createTokenURIParamsPart1(tokenId, quoteTokenAddress, baseTokenAddress, flipRatio, tickLower, tickUpper);
+        params = createTokenURIParamsPart2(params, tickCurrent, tickSpacing, fee, poolAddress);
+
+        // Construct and return token URI
+        return NFTDescriptor.constructTokenURI(params);
     }
 
-    function flipRatio(address token0, address token1, uint256 chainId) public view returns (bool) {
+    /// @dev Determines the token order based on flipRatio
+    function getTokenOrder(address token0, address token1)
+        private
+        view
+        returns (address quoteTokenAddress, address baseTokenAddress, bool flipRatio)
+    {
+        flipRatio = _flipRatio(token0, token1, ChainId.get());
+        quoteTokenAddress = !flipRatio ? token1 : token0;
+        baseTokenAddress = !flipRatio ? token0 : token1;
+    }
+
+    /// @dev Fetches pool data (tickCurrent and tickSpacing)
+    function getPoolData(IPool pool) private view returns (int24 tickCurrent, int24 tickSpacing) {
+        (, tickCurrent,,,,,) = pool.getSlot0();
+        tickSpacing = pool.getTickSpacing();
+    }
+
+    /// @dev Creates the first part of the token URI parameters
+    function createTokenURIParamsPart1(
+        uint256 tokenId,
+        address quoteTokenAddress,
+        address baseTokenAddress,
+        bool flipRatio,
+        int24 tickLower,
+        int24 tickUpper
+    ) private pure returns (NFTDescriptor.ConstructTokenURIParams memory params) {
+        params.tokenId = tokenId;
+        params.quoteTokenAddress = quoteTokenAddress;
+        params.baseTokenAddress = baseTokenAddress;
+        params.flipRatio = flipRatio;
+        params.tickLower = tickLower;
+        params.tickUpper = tickUpper;
+    }
+
+    /// @dev Creates the second part of the token URI parameters
+    function createTokenURIParamsPart2(
+        NFTDescriptor.ConstructTokenURIParams memory params,
+        int24 tickCurrent,
+        int24 tickSpacing,
+        uint24 fee,
+        address poolAddress
+    ) private view returns (NFTDescriptor.ConstructTokenURIParams memory) {
+        params.quoteTokenSymbol = getTokenSymbol(params.quoteTokenAddress);
+        params.baseTokenSymbol = getTokenSymbol(params.baseTokenAddress);
+        params.quoteTokenDecimals = IERC20Metadata(params.quoteTokenAddress).decimals();
+        params.baseTokenDecimals = IERC20Metadata(params.baseTokenAddress).decimals();
+        params.tickCurrent = tickCurrent;
+        params.tickSpacing = tickSpacing;
+        params.fee = fee;
+        params.poolAddress = poolAddress;
+        return params;
+    }
+
+    /// @dev Helper function to get token symbol
+    function getTokenSymbol(address token) private view returns (string memory) {
+        return token == WETH9 ? nativeCurrencyLabel() : SafeERC20Namer.tokenSymbol(token);
+    }
+
+    /// @dev Determines if the token pair should be flipped based on priority
+    function _flipRatio(address token0, address token1, uint256 chainId) public view returns (bool) {
         return tokenRatioPriority(token0, chainId) > tokenRatioPriority(token1, chainId);
     }
 
+    /// @dev Returns the priority of a token for sorting
     function tokenRatioPriority(address token, uint256 chainId) public view returns (int256) {
         if (token == WETH9) {
             return TokenRatioSortOrder.DENOMINATOR;

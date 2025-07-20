@@ -16,8 +16,6 @@ import {SelfPermit} from "../base/SelfPermit.sol";
 import {Payment} from "../base/Payment.sol";
 import {ImutableState} from "../base/ImutableStates.sol";
 import {PaymentWithFee} from "../base/PaymentWithFee.sol";
-import {ProtocolFees} from "../governance/ProtocolFees.sol";
-import {EmergencyPause} from "../governance/EmergencyPause.sol";
 
 contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, PaymentWithFee {
     using Path for bytes;
@@ -27,9 +25,6 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
     error TooLittleReceived();
     error ExcessiveInputAmount();
     error ExcessiveOutputAmount();
-
-    ProtocolFees public immutable protocolFees;
-    EmergencyPause public immutable emergencyPause;
 
     struct SwapCallbackData {
         bytes path;
@@ -41,12 +36,7 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
         _;
     }
 
-    constructor(address _factory, address _weth9, address _protocolFees, address _emergencyPause)
-        ImutableState(_factory, _weth9)
-    {
-        protocolFees = ProtocolFees(_protocolFees);
-        emergencyPause = EmergencyPause(_emergencyPause);
-    }
+    constructor(address _factory, address _weth9) ImutableState(_factory, _weth9) {}
 
     function supaSwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata _data) external override {
         require(amount0Delta > 0 || amount1Delta > 0, "Zero swap");
@@ -85,7 +75,6 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
 
         (address tokenIn, address tokenOut, uint24 fee) = data.path.decodeFirstPool();
         IPool pool = getPool(tokenIn, tokenOut, fee);
-        require(!emergencyPause.isPoolPaused(address(pool)), "Pool paused");
 
         bool zeroForOne = tokenIn < tokenOut;
 
@@ -159,7 +148,6 @@ contract SwapRouter is ISwapRouter, Multicall, SelfPermit, ImutableState, Paymen
 
         (address tokenOut, address tokenIn, uint24 fee) = data.path.decodeFirstPool();
         IPool pool = getPool(tokenIn, tokenOut, fee);
-        require(!emergencyPause.isPoolPaused(address(pool)), "Pool paused");
 
         bool zeroForOne = tokenIn < tokenOut;
 

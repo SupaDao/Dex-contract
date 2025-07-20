@@ -4,7 +4,7 @@ out = "out"
 libs = ["lib"]
 solc_version = "0.8.24"
 optimizer = true
-optimizer_runs = 1_000_000
+optimizer_runs = 50
 remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
 ]

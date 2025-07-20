@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {FullMath} from "./FullMath.sol";
 import {FixedPoint128} from "./FixedPoint128.sol";
+import {TransferHelper} from "./TransferHelper.sol";
 
 /// @title  FeeMath
 /// @notice Safely calculates fee growth over time per unit liquidity
@@ -33,5 +34,35 @@ library FeeMath {
 
     function applyFeeGrowth(uint256 _feeGrowthInsideX128, uint128 _liquidity) internal pure returns (uint256 amount) {
         amount = FullMath.mulDiv(_feeGrowthInsideX128, _liquidity, FixedPoint128.Q128);
+    }
+
+    function applyLiquidityFee(uint256 amount, uint24 fee, address token, address feeRecipient)
+        internal
+        returns (uint256 feeAmount)
+    {
+        feeAmount = fee > 0 ? FullMath.mulDiv(amount, fee, 10000) : 0;
+        if (feeAmount > 0 && feeRecipient != address(0)) {
+            TransferHelper.safeTransfer(token, feeRecipient, feeAmount);
+        }
+    }
+
+    function applySwapFee(uint256 amountIn, uint24 fee, address token, address feeRecipient)
+        internal
+        returns (uint256 feeAmount)
+    {
+        feeAmount = fee > 0 ? FullMath.mulDiv(amountIn, fee, 10000) : 0;
+        if (feeAmount > 0 && feeRecipient != address(0)) {
+            TransferHelper.safeTransfer(token, feeRecipient, feeAmount);
+        }
+    }
+
+    function applyFlashFee(uint256 amount, uint24 fee, address token, address feeRecipient)
+        internal
+        returns (uint256 feeAmount)
+    {
+        feeAmount = FullMath.mulDivRoundingUp(amount, fee, 1e6);
+        if (feeAmount > 0 && feeRecipient != address(0)) {
+            TransferHelper.safeTransfer(token, feeRecipient, feeAmount);
+        }
     }
 }
