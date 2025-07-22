@@ -38,10 +38,10 @@ contract DeployAll is Script {
         WMONMock WMON = new WMONMock();
         console.log("WMON (Wrapped Monad) deployed at:", address(WMON));
 
+        bytes32 label = bytes32("MON");
+
         // 4. Periphery Contracts
-        NonfungibleTokenPositionDescriptor descriptor = new NonfungibleTokenPositionDescriptor(
-            address(WMON), 0x4554480000000000000000000000000000000000000000000000000000000000
-        );
+        NonfungibleTokenPositionDescriptor descriptor = new NonfungibleTokenPositionDescriptor(address(WMON), label);
         console.log("TokenDescriptor deployed at:", address(descriptor));
 
         Quoter quoter = new Quoter(address(factory));

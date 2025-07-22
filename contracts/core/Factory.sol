@@ -10,8 +10,6 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 /// @notice Deploys and tracks pools for SupaDAO DEX
 
 contract Factory is IFactory, Ownable, PoolDeployer, NoDelegateCall {
-    address[] public allPools;
-
     ///@dev custom error;
     error IdenticalTokens();
     error ZeroAddress();
@@ -60,12 +58,15 @@ contract Factory is IFactory, Ownable, PoolDeployer, NoDelegateCall {
         pool = deploy(token0, token1, _fee, address(this), tickSpacing);
         getPool[token0][token1][_fee] = pool;
         getPool[token1][token0][_fee] = pool;
-        allPools.push(pool);
 
         emit PoolCreated(token0, token1, _fee, pool);
     }
 
     function owner() public view virtual override(IFactory, Ownable) returns (address) {
         return super.owner();
+    }
+
+    function setOwner(address _owner) external onlyOwner {
+        transferOwnership(_owner);
     }
 }

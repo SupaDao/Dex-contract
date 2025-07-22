@@ -11,4 +11,5 @@ interface IFactory {
     function enableFeeTier(uint24 fee, int24 tickSpacing) external;
     function feeToTickSpacing(uint24 fee) external view returns (int24 tickSpacing);
     function owner() external view returns (address);
+    function setOwner(address _owner) external;
 }

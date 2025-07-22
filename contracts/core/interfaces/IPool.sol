@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Position} from "../../libraries/Position.sol";
+
 interface IPool {
     ///Immutables
     function factory() external view returns (address);
@@ -220,4 +222,57 @@ interface IPool {
     function collectProtocol(address recipient, uint128 amount0Requested, uint128 amount1Requested)
         external
         returns (uint128 amount0, uint128 amount1);
+
+    ///@dev new helper functions for flash token manager
+    function addProtocolFeesCollected0(uint128 amount) external;
+    function addProtocolFeesCollected1(uint128 amount) external;
+    function setFeeGrowthGlobal0X128(uint256 feeGrowthGlobal0X128) external;
+    function setFeeGrowthGlobal1X128(uint256 feeGrowthGlobal1X128) external;
+    function setSlot0FeeProtocol(uint8 feeProtocol) external;
+    function subProtocolFeesCollected0(uint128 amount) external;
+    function subProtocolFeesCollected1(uint128 amount) external;
+
+    ///@dev new helper function for Liquidity manager
+    function getPosition(address owner, int24 tickLower, int24 tickUpper)
+        external
+        view
+        returns (Position.Info memory position);
+    function setSlot0(
+        uint160 sqrtPriceX96,
+        int24 tick,
+        uint16 observationIndex,
+        uint16 observationCardinality,
+        uint16 observationCardinalityNext,
+        uint8 feeProtocol,
+        bool unlocked
+    ) external;
+    function setLiquidity(uint128 liquidity) external;
+    function updateTick(int24 tick, int128 liquidityDelta) external returns (bool flipped);
+    function tickBitmapFlipTick(int24 tick) external;
+    function getFeeGrowthInside(int24 tickLower, int24 tickUpper)
+        external
+        view
+        returns (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128);
+    function updatePosition(
+        address owner,
+        int24 tickLower,
+        int24 tickUpper,
+        uint128 liquidityDelta,
+        uint256 feeGrowthInside0X128,
+        uint256 feeGrowthInside1X128
+    ) external;
+    function clearTick(int24 tick) external;
+
+    ///@dev new helpers for SwapManager
+    function nextInitializedTick(int24 tick, int24 tickSpacing, bool zeroForOne)
+        external
+        returns (int24 tickNext, bool initialized);
+    function crossTick(
+        int24 tickNext,
+        uint256 feeGrowthGlobalX128,
+        uint160 secondsPerLiquidityCumulativeX128,
+        int56 tickCumulative,
+        uint32 blockTime,
+        bool zeroForOne
+    ) external returns (int128 liquidityNet);
 }

@@ -4,10 +4,10 @@ out = "out"
 libs = ["lib"]
 solc_version = "0.8.24"
 optimizer = true
-optimizer_runs = 50
+optimizer_runs = 1
 remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
 ]
-via_ir = true
+ via_ir = true
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
